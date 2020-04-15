@@ -36,7 +36,7 @@ ICON_DATA = {
 
 PluginInfo = {
   Name = "Zach Strauss~OpenWeatherMap",
-  Version = "1.0",
+  Version = "1.0.1",
   Id = "7a5fcdeb-6f66-4974-84ff-eb5aab5527a9",
   Description = "Initial client for OpenWeatherMap API",
   ShowDebug = true,
@@ -1353,9 +1353,9 @@ function updateWeatherData()
   local lat = Controls["Latitude"].String
   local lon = Controls["Longitude"].String
   local api = Controls["API Key"].String
-  local ControlUnits = "metric"
+  local units = "metric"
   if Properties["Units"].Value == "US" then
-    ControlUnits = "imperial"
+    units = "imperial"
   end
   local url = HttpClient.CreateUrl({
     Host = "https://api.openweathermap.org",
@@ -1364,7 +1364,7 @@ function updateWeatherData()
       appid = api,
       lat = lat,
       lon = lon,
-      ControlUnits = ControlUnits
+      units = units
     }
   })
   print("Calling " .. url)
