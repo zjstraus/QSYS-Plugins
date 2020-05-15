@@ -1,0 +1,337 @@
+--[[
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+]]
+
+PluginInfo = {
+  Name = "Zach Strauss~SignalPresencePlus",
+  Version = "1.0.0",
+  Id = "69c0edd7-697d-4a26-b503-32250f63265d",
+  Description = "Combination signal presence and metering LEDs",
+  ShowDebug = false
+}
+
+function GetPrettyName()
+  return "Signal Presence +"
+end
+
+function GetColor()
+  return {13, 219, 133}
+end
+
+function GetProperties()
+  return {
+    {
+    Name = "Channels",
+    Type = "integer",
+    Max = 24,
+    Min = 1,
+    Value = 1
+    }
+  }
+end
+
+function GetControls(properties)
+  return {
+    {
+        Name = "LED",
+        ControlType = "Indicator",
+        IndicatorType = "LED",
+        Count = properties['Channels'].Value,
+        PinStyle = 'Output',
+        UserPin = true
+    },
+    {
+        Name = "Active Level",
+        ControlType = "Knob",
+        ControlUnit = "dB",
+        Min = -100,
+        Max = 12,
+        Count = 1,
+        Value = -50
+    },
+    {
+        Name = "Green Level",
+        ControlType = "Knob",
+        ControlUnit = "dB",
+        Min = -100,
+        Max = 12,
+        Count = 1,
+        Value = -40
+    },
+    {
+        Name = "Yellow Level",
+        ControlType = "Knob",
+        ControlUnit = "dB",
+        Min = -100,
+        Max = 12,
+        Count = 1,
+        Value = -6
+    },
+    {
+        Name = "Red Level",
+        ControlType = "Knob",
+        ControlUnit = "dB",
+        Min = -100,
+        Max = 12,
+        Count = 1,
+        Value = 6
+    }
+  }
+end
+
+function GetControlLayout(properties)
+  local graphics = {}
+  local layout = {}
+
+  -- The threshold controls are channel independent
+  layout['Active Level'] = {
+    Style = "Knob",
+    Position = {7, 5},
+    Size = {36, 36}
+  }
+  table.insert(graphics, {
+    Type = "Label",
+    Text = "Active",
+    Position = {0, 41},
+    Size = {50, 16}
+  })
+
+  layout['Green Level'] = {
+    Style = "Knob",
+    Position = {57, 5},
+    Size = {36, 36}
+  }
+  table.insert(graphics, {
+    Type = "Label",
+    Text = "Green",
+    Position = {50, 41},
+    Size = {50, 16}
+  })
+
+  layout['Yellow Level'] = {
+    Style = "Knob",
+    Position = {107, 5},
+    Size = {36, 36}
+  }
+  table.insert(graphics, {
+    Type = "Label",
+    Text = "Yellow",
+    Position = {100, 41},
+    Size = {50, 16}
+  })
+
+  layout['Red Level'] = {
+    Style = "Knob",
+    Position = {157, 5},
+    Size = {36, 36}
+  }
+  table.insert(graphics, {
+    Type = "Label",
+    Text = "Red",
+    Position = {150, 41},
+    Size = {50, 16}
+  })
+
+  local startX = 14
+  local startY = 80
+  local rowcount = 0
+  local spaceX = 30
+  local spaceY = 45
+
+  if properties['Channels'].Value == 1 then
+    layout['LED'] = {
+      Style = "Led",
+      Position = {startX + 4, startY + 22},
+      Size = {16, 16}
+    }
+    table.insert(graphics, {
+      Type = "Label",
+      Text = "1",
+      Position = {startX, startY},
+      Size = {24, 22}
+    })
+    return layout, graphics
+  end
+
+  for i=1,properties['Channels'].Value do
+    layout['LED ' .. i] = {
+      Style = "Led",
+      Position = {startX + (spaceX * rowcount) + 4, startY + 22},
+      Size = {16, 16}
+    }
+    table.insert(graphics, {
+      Type = "Label",
+      Text = tostring(i),
+      Position = {startX + (spaceX * rowcount), startY},
+      Size = {24, 22}
+    })
+
+    if rowcount == 5 then
+      rowcount = 0
+      startY = startY + spaceY
+    else
+      rowcount = rowcount + 1
+    end
+  end
+  return layout, graphics
+end
+
+function GetPins(properties)
+  local pins = {}
+  for i=1,properties['Channels'].Value do
+    table.insert(pins, {
+      Name = "Input " .. i,
+      Direction = "input"
+    })
+  end
+  return pins
+end
+
+function GetComponents(properties)
+  return {
+    {
+      Name = "meters",
+      Type = "meter2",
+      Properties = {
+        ["multi_channel_type"] = 3,
+        ["multi_channel_count"] = properties["Channels"].Value
+      }
+    }
+  }
+end
+
+function GetWiring(properties)
+  local wires = {}
+  for i=1,properties["Channels"].Value do
+    table.insert(wires, {
+      "Input " .. i, "meters Input " .. i
+    })
+  end
+  return wires
+end
+
+if Controls then
+  function colorTableToHex(input)
+    return string.format("#%02X%02X%02X", input[1], input[2], input[3])
+  end
+  
+  colors = {
+    black = {0, 0, 0},
+    green = {0, 255, 0},
+    yellow = {255, 200, 0},
+    red = {255, 0, 0}
+  }
+  
+  activeLevel = 0
+  greenLevel = 0
+  yellowLevel = 0
+  redLevel = 0
+  function updateLevels()
+    if Controls['Green Level'].Value < Controls['Active Level'].Value then
+      Controls['Green Level'].Value = Controls['Active Level'].Value
+    end
+    if Controls['Yellow Level'].Value < Controls['Green Level'].Value then
+      Controls['Yellow Level'].Value = Controls['Green Level'].Value
+    end
+    if Controls['Red Level'].Value < Controls['Yellow Level'].Value then
+      Controls['Red Level'].Value = Controls['Yellow Level'].Value
+    end
+    activeLevel = Controls['Active Level'].Value
+    greenLevel = Controls['Green Level'].Value
+    yellowLevel = Controls['Yellow Level'].Value
+    redLevel = Controls['Red Level'].Value
+  end
+  Controls['Active Level'].EventHandler = updateLevels
+  Controls['Green Level'].EventHandler = updateLevels
+  Controls['Yellow Level'].EventHandler = updateLevels
+  Controls['Red Level'].EventHandler = updateLevels
+  updateLevels()
+  
+  -- Avoid allocating in main loop
+  baseValue = 0
+  baseColor = {}
+  nextValue = 0
+  nextColor = {}
+  
+  difference = 0
+  scaledDifference = 0
+  range = 0
+  targetColor = {}
+  
+  for i=1, Properties['Channels'].Value do
+    local index = nil
+    if Properties['Channels'].Value > 1 then
+      index = i
+    end
+    _G['meters']['meter.'..i].EventHandler = function(ctrl)
+      if ctrl.Value < activeLevel then
+        if index ~= nil then
+          Controls['LED'][index].Boolean = false
+          Controls['LED'][index].Color = colorTableToHex(colors['black'])
+        else
+          Controls['LED'].Boolean = false
+          Controls['LED'].Color = colorTableToHex(colors['black'])
+        end
+        return
+      end
+
+      if index ~= nil then
+        Controls['LED'][index].Boolean = true
+      else
+        Controls['LED'].Boolean = true
+      end
+
+      if ctrl.Value > redLevel then
+        if index ~= nil then
+          Controls['LED'][index].Color = colorTableToHex(colors['red'])
+        else
+          Controls['LED'].Color = colorTableToHex(colors['red'])
+        end
+        return
+      end
+      
+      if ctrl.Value > yellowLevel then
+        baseValue = yellowLevel
+        nextValue = redLevel
+        baseColor = colors['yellow']
+        nextColor = colors['red']
+      elseif ctrl.Value > greenLevel then
+        baseValue = greenLevel
+        nextValue = yellowLevel
+        baseColor = colors['green']
+        nextColor = colors['yellow']
+      else
+        baseValue = activeLevel
+        nextValue = greenLevel
+        baseColor = colors['black']
+        nextColor = colors['green']
+      end
+      
+      range = nextValue - baseValue
+      difference = ctrl.Value - baseValue
+      scaledDifference = difference / range
+      
+      for i=1,#baseColor do
+        difference = nextColor[i] - baseColor[i]
+        targetColor[i] = math.floor(baseColor[i] + (difference * scaledDifference))
+      end
+      
+      if index ~= nil then
+        Controls['LED'][index].Color = colorTableToHex(targetColor)
+      else
+        Controls['LED'].Color = colorTableToHex(targetColor)
+      end
+    end
+  end
+end
